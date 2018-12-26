@@ -2,13 +2,14 @@
  using System.Threading;
  using Hazelcast.Client;
  using Hazelcast.Config;
- 
+
  namespace Client
  {
      class Program
      {
          public static void Main(string[] args)
          {
+             Environment.SetEnvironmentVariable("hazelcast.client.cloud.url", "YOUR_DISCOVERY_URL");
              var config = new ClientConfig();
              config.GetGroupConfig()
                  .SetName("YOUR_CLUSTER_NAME")
@@ -16,7 +17,7 @@
              config.GetNetworkConfig().GetCloudConfig()
                  .SetEnabled(true)
                  .SetDiscoveryToken("YOUR_CLUSTER_DISCOVERY_TOKEN");
-             
+
              var client = HazelcastClient.NewHazelcastClient(config);
              var map = client.GetMap<string, string>("map");
              map.Put("key", "value");

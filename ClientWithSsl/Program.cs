@@ -9,19 +9,22 @@ namespace Client
     {
         public static void Main(string[] args)
         {
+            Environment.SetEnvironmentVariable("hazelcast.client.statistics.enabled", "true");
+            Environment.SetEnvironmentVariable("hazelcast.client.cloud.url", "YOUR_DISCOVERY_URL");
             var config = new ClientConfig();
             config.GetGroupConfig()
                 .SetName("YOUR_CLUSTER_NAME")
                 .SetPassword("YOUR_CLUSTER_PASSWORD");
-            
+
             config.GetNetworkConfig().GetCloudConfig()
                 .SetEnabled(true)
                 .SetDiscoveryToken("YOUR_CLUSTER_DISCOVERY_TOKEN");
-            
+
             config.GetNetworkConfig().GetSSLConfig()
                 .SetEnabled(true)
-                .SetProperty(SSLConfig.CertificateFilePath, "CLIENT_PFX_CERTIFICATE_PATH")
-                .SetProperty(SSLConfig.CertificatePassword, "CLIENT_PFX_CERTIFICATE_PASSWORD");
+                .SetProperty(SSLConfig.ValidateCertificateChain, "false")
+                .SetProperty(SSLConfig.CertificateFilePath, "client.pfx")
+                .SetProperty(SSLConfig.CertificatePassword, "YOUR_SSL_PASSWORD");
 
             var client = HazelcastClient.NewHazelcastClient(config);
             var map = client.GetMap<string, string>("map");
