@@ -10,6 +10,7 @@
          public static void Main(string[] args)
          {
              Environment.SetEnvironmentVariable("hazelcast.client.cloud.url", "YOUR_DISCOVERY_URL");
+             Environment.SetEnvironmentVariable("hazelcast.client.statistics.enabled", "true");
              var config = new ClientConfig();
              config.GetGroupConfig()
                  .SetName("YOUR_CLUSTER_NAME")
