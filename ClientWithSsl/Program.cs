@@ -46,7 +46,6 @@ namespace Client
                 {
                     Console.WriteLine("map size: {0}", map.Size());
                 }
-                Thread.Sleep(100);
             }
         }
     }
