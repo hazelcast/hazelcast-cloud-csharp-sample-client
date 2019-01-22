@@ -3,6 +3,14 @@ using System.Threading;
 using Hazelcast.Client;
 using Hazelcast.Config;
 
+/**
+ *
+ * This is boilerplate application that configures client to connect Hazelcast Cloud cluster.
+ * After successful connection, it puts random entries into the map.
+ *
+ * See: https://docs.hazelcast.cloud/docs/csharp-client
+ *
+ */
 namespace Client
 {
     class Program
