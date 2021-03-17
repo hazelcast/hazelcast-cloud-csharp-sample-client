@@ -13,11 +13,12 @@
 // limitations under the License.
 
 using System;
+using System.Security.Authentication;
 using System.Threading.Tasks;
 using Hazelcast;
 using Microsoft.Extensions.Logging;
 
-namespace Client
+namespace ClientWithSsl
 {
     /*
      * A sample application that configures a client to connect to an Hazelcast Cloud cluster
@@ -33,7 +34,7 @@ namespace Client
         public static async Task Main(string[] args)
         {
             Console.WriteLine();
-            Console.WriteLine("Hazelcast Cloud Client");
+            Console.WriteLine("Hazelcast Cloud Client with SSL");
 
             Console.Write("Build options...");
             var options = new HazelcastOptionsBuilder()
@@ -51,6 +52,13 @@ namespace Client
             // set the cloud discovery token and url
             options.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
             //options.Networking.Cloud.Url = "YOUR_DISCOVERY_URL";
+
+            // set ssl
+            options.Networking.Ssl.Enabled = true;
+            options.Networking.Ssl.ValidateCertificateChain = false;
+            options.Networking.Ssl.Protocol = SslProtocols.Tls12;
+            options.Networking.Ssl.CertificatePath = "client.pfx";
+            options.Networking.Ssl.CertificatePassword = "YOUR_SSL_PASSWORD";
 
             Console.WriteLine(" ok.");
 
