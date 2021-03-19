@@ -1,60 +1,115 @@
 ﻿using System;
-using System.Threading;
-using Hazelcast.Client;
-using Hazelcast.Config;
+using System.Security.Authentication;
+using System.Threading.Tasks;
+using Hazelcast;
+using Microsoft.Extensions.Logging;
 
-/**
- *
- * This is boilerplate application that configures client to connect Hazelcast Cloud cluster.
- * After successful connection, it puts random entries into the map.
- *
- * See: https://docs.hazelcast.cloud/docs/csharp-client
- *
- */
-namespace Client
+namespace ClientWithSsl
 {
-    class Program
+    /*
+     * A sample application that configures a client to connect to an Hazelcast Cloud cluster
+     * with SSL, and to then put and get random values in/from a map, thus testing that the
+     * connection to the Hazelcast Cloud cluster is successful.
+     *
+     * see: https://hazelcast.github.io/hazelcast-csharp-client/
+     */
+    internal static class Program
     {
-        public static void Main(string[] args)
+        private const int IterationCount = 100;
+
+        public static async Task Main(string[] args)
         {
-            Environment.SetEnvironmentVariable("hazelcast.client.statistics.enabled", "true");
-            Environment.SetEnvironmentVariable("hazelcast.client.cloud.url", "YOUR_DISCOVERY_URL");
-            var config = new ClientConfig();
-            config.GetGroupConfig()
-                .SetName("YOUR_CLUSTER_NAME")
-                .SetPassword("YOUR_CLUSTER_PASSWORD");
+            Console.WriteLine();
+            Console.WriteLine("Hazelcast Cloud Client with SSL");
 
-            config.GetNetworkConfig().GetCloudConfig()
-                .SetEnabled(true)
-                .SetDiscoveryToken("YOUR_CLUSTER_DISCOVERY_TOKEN");
+            Console.Write("Build options...");
+            var options = new HazelcastOptionsBuilder()
+                .With(args)
+                .WithConsoleLogger()
+                //.With("Logging:LogLevel:Hazelcast", "Information")
+                .Build();
 
-            config.GetNetworkConfig().GetSSLConfig()
-                .SetEnabled(true)
-                .SetProperty(SSLConfig.ValidateCertificateChain, "false")
-                .SetProperty(SSLConfig.CertificateFilePath, "client.pfx")
-                .SetProperty(SSLConfig.CertificatePassword, "YOUR_SSL_PASSWORD");
+            // log level must be a valid Microsoft.Extensions.Logging.LogLevel value
+            //   Trace | Debug | Information | Warning | Error | Critical | None
 
-            var client = HazelcastClient.NewHazelcastClient(config);
-            var map = client.GetMap<string, string>("map");
-            map.Put("key", "value");
-            if(map.Get("key").Equals("value"))
+            // set the cluster name
+            options.ClusterName = "YOUR_CLUSTER_NAME";
+
+            // set the cloud discovery token and url
+            options.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
+            //options.Networking.Cloud.Url = "YOUR_DISCOVERY_URL";
+
+            // set ssl
+            options.Networking.Ssl.Enabled = true;
+            options.Networking.Ssl.ValidateCertificateChain = false;
+            options.Networking.Ssl.Protocol = SslProtocols.Tls12;
+            options.Networking.Ssl.CertificatePath = "client.pfx";
+            options.Networking.Ssl.CertificatePassword = "YOUR_SSL_PASSWORD";
+
+            Console.WriteLine(" ok.");
+
+            Console.Write("Get and connect client...");
+            await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
+            Console.WriteLine(" ok.");
+
+            Console.Write("Get map...");
+            await using var map = await client.GetMapAsync<string, string>("map");
+            Console.WriteLine(" ok.");
+
+            Console.Write("Put value into map...");
+            await map.PutAsync("key", "value");
+            Console.WriteLine(" ok.");
+
+            Console.Write("Get value from map...");
+            var value = await map.GetAsync("key");
+            Console.WriteLine(" ok");
+
+            Console.Write("Validate value...");
+            if (value.Equals("value"))
             {
-                Console.WriteLine("Connection Successful!");
-                Console.WriteLine("Now, `map` will be filled with random entries.");
+                Console.WriteLine("ok.");
             }
-            else {
-                throw new Exception("Connection failed, check your configuration.");
+            else
+            {
+                Console.WriteLine("Error.");
+                Console.WriteLine("Check your configuration.");
+                return;
             }
+
+            Console.WriteLine("Put/Get values in/from map with random values...");
             var random = new Random();
-            while (true) {
-                var randomKey = random.Next(100_000);
-                map.Put("key" + randomKey, "value" + randomKey);
-                map.Get("key" + random.Next(100_000));
-                if(randomKey % 10 == 0 )
+            var step = IterationCount / 10;
+            for (var i = 0; i < IterationCount; i++)
+            {
+                var randomValue = random.Next(100_000);
+                await map.PutAsync("key_" + randomValue, "value_" + randomValue);
+
+                randomValue = random.Next(100_000);
+                await map.GetAsync("key" + randomValue);
+
+                if (i % step == 0)
                 {
-                    Console.WriteLine("map size: {0}", map.Size());
+                    Console.WriteLine($"[{i:D3}] map size: {await map.GetSizeAsync()}");
                 }
             }
+
+            Console.WriteLine("Done.");
+        }
+
+        public static HazelcastOptionsBuilder WithConsoleLogger(this HazelcastOptionsBuilder builder)
+        {
+            return builder
+                .With("Logging:LogLevel:Default", "None")
+                .With("Logging:LogLevel:System", "None")
+                .With("Logging:LogLevel:Microsoft", "None")
+                .With((configuration, options) =>
+                {
+                    // configure logging factory and add the console provider
+                    options.LoggerFactory.Creator = () => LoggerFactory.Create(loggingBuilder =>
+                        loggingBuilder
+                            .AddConfiguration(configuration.GetSection("logging"))
+                            .AddConsole());
+                });
         }
     }
 }
