@@ -2,6 +2,7 @@
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using Hazelcast;
+using Hazelcast.Networking;
 using Microsoft.Extensions.Logging;
 
 namespace ClientWithSsl
@@ -37,7 +38,10 @@ namespace ClientWithSsl
 
             // set the cloud discovery token and url
             options.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
-            //options.Networking.Cloud.Url = "YOUR_DISCOVERY_URL";
+            options.Networking.Cloud.Url = "YOUR_DISCOVERY_URL";
+
+            // make sure the client stays connected
+            options.Networking.ReconnectMode = ReconnectMode.ReconnectAsync;
 
             // set ssl
             options.Networking.Ssl.Enabled = true;
