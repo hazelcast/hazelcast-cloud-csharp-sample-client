@@ -26,21 +26,30 @@ namespace Client
             var options = new HazelcastOptionsBuilder()
                 .With(args)
                 .WithConsoleLogger()
-                //.With("Logging:LogLevel:Hazelcast", "Information")
+                .With("Logging:LogLevel:Hazelcast", "Information")
                 .Build();
 
             // log level must be a valid Microsoft.Extensions.Logging.LogLevel value
             //   Trace | Debug | Information | Warning | Error | Critical | None
 
-            // set the cluster name
-            options.ClusterName = "YOUR_CLUSTER_NAME";
+            if (args.Length == 0)
+            {
+                // it is OK to pass the arguments in the command line
+                // otherwise, they must be specified here
+                
+                // set the cluster name
+                options.ClusterName = "YOUR_CLUSTER_NAME";
 
-            // set the cloud discovery token and url
-            options.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
-            options.Networking.Cloud.Url = "YOUR_DISCOVERY_URL";
+                // set the cloud discovery token and url
+                options.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
+                options.Networking.Cloud.Url = new Uri("YOUR_DISCOVERY_URL");
+            }
 
             // make sure the client stays connected
             options.Networking.ReconnectMode = ReconnectMode.ReconnectAsync;
+
+            // enable metrics
+            options.Metrics.Enabled = true;
 
             Console.WriteLine(" ok.");
 
