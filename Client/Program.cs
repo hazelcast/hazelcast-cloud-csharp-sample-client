@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Hazelcast;
 using Hazelcast.Networking;
 using Microsoft.Extensions.Logging;
+using Hazelcast.DistributedObjects;
 
 namespace Client
 {
@@ -53,7 +54,7 @@ namespace Client
 
             Console.WriteLine(" ok.");
 
-            Console.Write("Get and connect client...");
+            Console.WriteLine("Get and connect client...");
             await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
             Console.WriteLine(" ok.");
 
@@ -81,6 +82,17 @@ namespace Client
                 return;
             }
 
+            // the 'MapExample' is an example with an infinite loop inside, so if you'd like to try other examples,
+            // don't forget to comment out the following line
+            await MapExample(map);
+
+            // await SqlExample(client);
+
+            Console.WriteLine("Done.");
+        }
+
+        public static async Task MapExample(IHMap<string, string> map)
+        {
             Console.WriteLine("Put/Get values in/from map with random values...");
             var random = new Random();
             var step = IterationCount / 10;
@@ -97,8 +109,57 @@ namespace Client
                     Console.WriteLine($"[{i:D3}] map size: {await map.GetSizeAsync()}");
                 }
             }
+        }
 
-            Console.WriteLine("Done.");
+        public static async Task SqlExample(IHazelcastClient hzClient)
+        {
+            Console.WriteLine("Creating a mapping...");
+            // See: https://docs.hazelcast.com/hazelcast/5.0/sql/mapping-to-maps
+            var mappingQuery = "CREATE OR REPLACE MAPPING cities TYPE IMap OPTIONS " +
+                "('keyFormat'='varchar','valueFormat'='varchar')";
+            await hzClient.Sql.ExecuteQueryAsync(mappingQuery);
+            Console.WriteLine("The mapping has been created successfully.");
+            Console.WriteLine("--------------------");
+
+            Console.WriteLine("Deleting data via SQL...");
+            var deleteQuery = "DELETE FROM cities";
+            await hzClient.Sql.ExecuteQueryAsync(deleteQuery);
+            Console.WriteLine("The data has been deleted successfully.");
+            Console.WriteLine("--------------------");
+
+            Console.WriteLine("Inserting data via SQL...");
+            var insertQuery = "INSERT INTO cities VALUES " +
+                "('Australia','Canberra')," +
+                "('Croatia','Zagreb')," +
+                "('Czech Republic','Prague')," +
+                "('England','London')," +
+                "('Turkey','Ankara')," +
+                "('United States','Washington, DC');";
+            await hzClient.Sql.ExecuteQueryAsync(insertQuery);
+            Console.WriteLine("The data has been inserted successfully.");
+            Console.WriteLine("--------------------");
+
+            Console.WriteLine("Retrieving all the data via SQL...");
+            var sqlResultAll = await hzClient.Sql.ExecuteQueryAsync("SELECT * FROM cities");
+            await foreach (var row in sqlResultAll)
+            {
+                var country = row.GetKey<string>();
+                var city = row.GetValue<string>();
+                Console.WriteLine("%s - %s", country, city);
+            }
+            Console.WriteLine("--------------------");
+
+            Console.WriteLine("Retrieving a city name via SQL...");
+            var sqlResultRecord = await hzClient.Sql
+                .ExecuteQueryAsync("SELECT __key AS country, this AS city FROM cities WHERE __key = ?",
+                new[]{"United States"});
+            await foreach (var row in sqlResultRecord)
+            {
+                var country = row.GetColumn<string>("country");
+                var city = row.GetColumn<string>("city");
+                Console.WriteLine("Country name: %s; City name: %s", country, city);
+            }
+            Console.WriteLine("--------------------");
         }
 
         public static HazelcastOptionsBuilder WithConsoleLogger(this HazelcastOptionsBuilder builder)
