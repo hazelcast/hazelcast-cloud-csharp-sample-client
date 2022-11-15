@@ -1,0 +1,5 @@
+Client/bin
+Client/obj
+ClientWithSsl/bin
+ClientWithSsl/obj
+.idea
