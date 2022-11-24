@@ -1,16 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31025.218
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33103.184
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Client", "Client\Client.csproj", "{FCFDC24C-B13D-4A63-B1D5-28B23FB7F0C1}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B19F3E07-E709-4775-8668-F7BAE4BF2465}"
 	ProjectSection(SolutionItems) = preProject
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClientWithSsl", "ClientWithSsl\ClientWithSsl.csproj", "{662D57EE-C1DF-44F4-9BF8-57A3638B5867}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ClientWithSsl", "ClientWithSsl\ClientWithSsl.csproj", "{662D57EE-C1DF-44F4-9BF8-57A3638B5867}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,10 +16,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{FCFDC24C-B13D-4A63-B1D5-28B23FB7F0C1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{FCFDC24C-B13D-4A63-B1D5-28B23FB7F0C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{FCFDC24C-B13D-4A63-B1D5-28B23FB7F0C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{FCFDC24C-B13D-4A63-B1D5-28B23FB7F0C1}.Release|Any CPU.Build.0 = Release|Any CPU
 		{662D57EE-C1DF-44F4-9BF8-57A3638B5867}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{662D57EE-C1DF-44F4-9BF8-57A3638B5867}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{662D57EE-C1DF-44F4-9BF8-57A3638B5867}.Release|Any CPU.ActiveCfg = Release|Any CPU
