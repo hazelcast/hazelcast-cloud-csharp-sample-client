@@ -1,58 +1,43 @@
 ﻿using System;
 using System.Security.Authentication;
-using System.Text.Json;
 using System.Threading.Tasks;
 using Hazelcast;
-using Hazelcast.Core;
-using Hazelcast.Networking;
 using Microsoft.Extensions.Logging;
 
 namespace ClientWithSsl
 {
     /*
-     * A sample application that configures a client to connect to an Hazelcast Cloud cluster
-     * with SSL, and to then put and get random values in/from a map, thus testing that the
-     * connection to the Hazelcast Cloud cluster is successful.
-     *
-     * see: https://hazelcast.github.io/hazelcast-csharp-client/
+     * A sample application that configures a client to connect to an Hazelcast Viridian cluster
+     * over TLS, and to then insert and fetch data with SQL, thus testing that the connection to 
+     * the Hazelcast Viridian cluster is successful.
+     * 
+     * Hazelcast .Net Client: https://hazelcast.github.io/hazelcast-csharp-client/
      */
     internal static class Program
     {
         public static async Task Main(string[] args)
         {
-            Console.WriteLine();
-            Console.WriteLine("Hazelcast Cloud Client with SSL");
+            Console.WriteLine("Connect Hazelcast Viridian with TLS");
 
             Console.Write("Build options...");
+
             var options = new HazelcastOptionsBuilder()
-                .With(args)
                 .WithConsoleLogger()
+                // Log level must be a valid Microsoft.Extensions.Logging.LogLevel value.
+                // Trace | Debug | Information | Warning | Error | Critical | None
                 .With("Logging:LogLevel:Hazelcast", "Information")
                 .Build();
 
-            // log level must be a valid Microsoft.Extensions.Logging.LogLevel value
-            //   Trace | Debug | Information | Warning | Error | Critical | None
+            // Your Viridian cluster name.
+            options.ClusterName = "YOUR_CLUSTER_NAME";
 
-            if (args.Length == 0)
-            {
-                // it is OK to pass the arguments in the command line
-                // otherwise, they must be specified here
+            // Your discovery token to connect Viridian cluster.
+            options.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
 
-                // set the cluster name
-                options.ClusterName = "YOUR_CLUSTER_NAME";
-
-                // set the cloud discovery token and url
-                options.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
-                options.Networking.Cloud.Url = new Uri("YOUR_DISCOVERY_URL");
-            }
-
-            // make sure the client stays connected
-            options.Networking.ReconnectMode = ReconnectMode.ReconnectAsync;
-
-            // enable metrics
+            // Enable metrics to see on Management Center.
             options.Metrics.Enabled = true;
 
-            // set ssl
+            // Configure SSL
             options.Networking.Ssl.Enabled = true;
             options.Networking.Ssl.ValidateCertificateChain = false;
             options.Networking.Ssl.Protocol = SslProtocols.Tls12;
@@ -63,291 +48,66 @@ namespace ClientWithSsl
             await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
             Console.WriteLine("Connection Sucessful!");
 
-            await MapExample(client);
-
-            // await SqlExample(client);
-
-            // await JsonSerializationExample(client);
-
-            // await NonStopMapExample(client);
+            // Arrange data with SQL.
+            await CreateMapping(client);
+            await AddUsersWithSQL(client);
+            await FetchUsersWithSQL(client);
 
             Console.WriteLine("Done.");
         }
 
-        /// <summary>
-        /// This example shows how to work with Hazelcast maps, where the map is updated continuously.
-        /// </summary>
-        private static async Task NonStopMapExample(IHazelcastClient client)
+        private static async Task CreateMapping(IHazelcastClient client)
         {
-            Console.WriteLine("Now the map named 'map' will be filled with random entries.");
+            // Mapping is required for your distributed map to be queried over SQL.
+            // See: https://docs.hazelcast.com/hazelcast/latest/sql/mapping-to-maps
 
-            var map = await client.GetMapAsync<string, string>("map");
-            var rnd = new Random();
-            var iterator = 0;
+            Console.Write("\nCreating the mapping...");
 
-            while (true)
-            {
-                var randomKey = rnd.Next(100_00);
-                await map.PutAsync("key-" + randomKey, "value-" + randomKey);
-                var _ = await map.GetAsync("key-" + rnd.Next(100_000));
+            var mappingCommand = @"CREATE OR REPLACE MAPPING 
+                                    users (
+                                        __key INT,
+                                        name VARCHAR,
+                                        country VARCHAR
+                                    ) TYPE IMAP
+                                    OPTIONS ( 'keyFormat' = 'int',
+                                              'valueFormat' = 'json-flat' )";
 
-                if (++iterator % 10 == 0)
-                {
-                    Console.WriteLine($"Current Map Size :{ await map.GetSizeAsync()}");
-                }
-            }
+            await client.Sql.ExecuteCommandAsync(mappingCommand);
+
+            Console.Write("OK.");
         }
 
-        #region JsonExample
-        private static async Task JsonSerializationExample(IHazelcastClient client)
+        private static async Task AddUsersWithSQL(IHazelcastClient client)
         {
-            await CreateMappingForContries(client);
+            Console.Write("\nInserting users into 'users' map via SQL...");
 
-            await PopulateCountriesWithMap(client);
+            var insertQuery = @"INSERT INTO users 
+                                (__key, name, country) VALUES
+                                (1, 'Emre', 'Türkiye'),
+                                (2, 'Aika', 'Japan'),
+                                (3, 'John', 'United States'),
+                                (4, 'Olivia', 'United Kingdom'),
+                                (5, 'Jonas', 'Germany')";
 
-            await SelectAllCountries(client);
+            await client.Sql.ExecuteCommandAsync(insertQuery);
 
-            await CreateMappingForCities(client);
-
-            await PopulateCities(client);
-
-            await SelectCitiesByCountries(client, "AU");
-
-            await SelectCountriesAndCities(client);
+            Console.Write("OK.");
         }
 
-        private static async Task SelectCountriesAndCities(IHazelcastClient client)
+        private static async Task FetchUsersWithSQL(IHazelcastClient client)
         {
-            var query = "SELECT c.isoCode, c.country, t.city, t.population"
-                + "  FROM country c"
-                + "  JOIN city t ON c.isoCode = t.country";
+            Console.WriteLine("\nFetching users via SQL...");
 
-            Console.WriteLine("Select country and city data in query that joins tables.");
-            Console.WriteLine($"| {"ISO",-10} | {"Country",-20} | {"City",-20} | {"Population",15} |");
+            await using var result = await client.Sql.ExecuteQueryAsync("SELECT * FROM users");
 
-            await using var result = await client.Sql.ExecuteQueryAsync(query);
+            Console.WriteLine("--Results of 'SELECT * FROM users'");
 
-            await foreach (var item in result)
+            await foreach (var row in result)
             {
-                Console.WriteLine($"| {item.GetColumn<string>("isoCode"),-10} | {item.GetColumn<string>("country"),-20} | {item.GetColumn<string>("city"),-20} | {item.GetColumn<long>("population"),15} |");
+                Console.WriteLine($"Id:{row.GetKey<int>()}\tName:{row.GetColumn<string>("name")}\tCountry:{row.GetColumn<string>("country")}");
             }
 
-            Console.WriteLine("------------------------------------------");
-        }
-
-        private static async Task SelectCitiesByCountries(IHazelcastClient client, string country)
-        {
-            var query = "SELECT city, population FROM city where country=?";
-            Console.WriteLine($"Select city and population with sql = {query}");
-
-            await using var result = await client.Sql.ExecuteQueryAsync(query, new object[] { country });
-
-            await foreach (var item in result)
-            {
-                Console.WriteLine($"City: {item.GetColumn<string>("city")}, Population: {item.GetColumn<long>("population")}");
-            }
-            Console.WriteLine("------------------------------------------");
-        }
-
-        private static async Task PopulateCities(IHazelcastClient client)
-        {
-            // see: https://docs.hazelcast.com/hazelcast/5.1/data-structures/creating-a-map#writing-json-to-a-map
-            Console.WriteLine("Populating 'city' map with JSON values...");
-
-            var map = await client.GetMapAsync<string, HazelcastJsonValue>("city");
-
-            await map.PutAsync("1", new CityDTO { City = "Canberra", Population = 467_194, Country = "AU" }.AsJson());
-            await map.PutAsync("2", new CityDTO { City = "Prague", Population = 1_318_085, Country = "CZ" }.AsJson());
-            await map.PutAsync("3", new CityDTO { City = "London", Population = 9_540_576, Country = "EN" }.AsJson());
-            await map.PutAsync("4", new CityDTO { City = "Washington, DC", Population = 7_887_965, Country = "US" }.AsJson());
-
-            Console.WriteLine("The 'city' map has been populated.");
-            Console.WriteLine("------------------------------------------");
-        }
-
-        private static async Task CreateMappingForCities(IHazelcastClient client)
-        {
-            //see: https://docs.hazelcast.com/hazelcast/5.1/sql/mapping-to-maps#json-objects
-            Console.WriteLine("Creating mapping for cities...");
-
-            string mappingSql = "CREATE OR REPLACE MAPPING city("
-                 + " __key INT ,"
-                 + " country VARCHAR ,"
-                 + " city VARCHAR,"
-                 + " population BIGINT)"
-                 + " TYPE IMap"
-                 + " OPTIONS ("
-                 + "     'keyFormat' = 'int',"
-                 + "     'valueFormat' = 'json-flat'"
-                 + " )";
-
-            if (await client.Sql.ExecuteCommandAsync(mappingSql) > 0)
-                Console.WriteLine("The mapping has been created successfully.");
-
-            Console.WriteLine("------------------------------------------");
-        }
-
-        private static async Task SelectAllCountries(IHazelcastClient client)
-        {
-            var query = "SELECT c.country from country c";
-            Console.WriteLine($"Select all countries with sql = {query}");
-
-            await using var result = await client.Sql.ExecuteQueryAsync(query);
-
-            await foreach (var item in result)
-            {
-                Console.WriteLine($"Country: {item.GetColumn<object>("country")}");
-            }
-            Console.WriteLine("------------------------------------------");
-        }
-
-        private static async Task PopulateCountriesWithMap(IHazelcastClient client)
-        {
-            Console.WriteLine("Populating 'country' map with JSON values...");
-            // see: https://docs.hazelcast.com/hazelcast/5.1/data-structures/creating-a-map#writing-json-to-a-map
-
-            var map = await client.GetMapAsync<string, HazelcastJsonValue>("country");
-            await map.PutAsync("AU", new CountryDTO { ISOCode = "AU", Country = "Australia" }.AsJson());
-            await map.PutAsync("EN", new CountryDTO { ISOCode = "EN", Country = "England" }.AsJson());
-            await map.PutAsync("US", new CountryDTO { ISOCode = "US", Country = "United States" }.AsJson());
-            await map.PutAsync("CZ", new CountryDTO { ISOCode = "CZ", Country = "Czech Republic" }.AsJson());
-
-            Console.WriteLine("The 'countries' map has been populated.");
-            Console.WriteLine("------------------------------------------");
-        }
-
-        private static async Task CreateMappingForContries(IHazelcastClient client)
-        {
-            Console.WriteLine("Creating a mapping for 'country'...");
-            // See: https://docs.hazelcast.com/hazelcast/5.1/sql/mapping-to-maps
-
-            var mappingString = "CREATE OR REPLACE MAPPING country("
-                                + "     __key VARCHAR,"
-                                + "     isoCode VARCHAR,"
-                                + "     country VARCHAR"
-                                + ") TYPE IMap"
-                                + " OPTIONS ("
-                                + "     'keyFormat' = 'varchar',"
-                                + "     'valueFormat' = 'json-flat'"
-                                + " )";
-
-            if (await client.Sql.ExecuteCommandAsync(mappingString) > 0)
-                Console.WriteLine("Mapping for countries has been created.");
-
-            Console.WriteLine("------------------------------------------");
-        }
-        #endregion
-
-        #region SqlExample
-        private static async Task SqlExample(IHazelcastClient client)
-        {
-            await CreateMappingForCapitals(client);
-
-            await ClearCapitals(client);
-
-            await PopulateCapitals(client);
-
-            await SelectAllCapitals(client);
-
-            await SelectAllCapitalNames(client);
-
-        }
-
-        private static async Task SelectAllCapitalNames(IHazelcastClient client)
-        {
-            Console.WriteLine("Retrieving the capital name via SQL...");
-
-            await using var result = await client.Sql.ExecuteQueryAsync("SELECT * FROM capitals WHERE __key=?", new object[] { "United States" });
-
-            await foreach (var item in result)
-            {
-                var country = item.GetColumn<string>(0);
-                var city = item.GetColumn<string>(1);
-
-                Console.WriteLine($"Country: {country}; Capital: {city}");
-            }
-        }
-
-        private static async Task SelectAllCapitals(IHazelcastClient client)
-        {
-            Console.WriteLine("Retrieving all the data via SQL...");
-
-            await using var result = await client.Sql.ExecuteQueryAsync("SELECT * FROM capitals");
-
-            await foreach (var item in result)
-            {
-                var country = item.GetColumn<string>(0);
-                var city = item.GetColumn<string>(1);
-
-                Console.WriteLine($"Country:{country}; City:{city}");
-            }
-
-            Console.WriteLine("------------------------------------------");
-        }
-
-        private static async Task PopulateCapitals(IHazelcastClient client)
-        {
-            Console.WriteLine("Inserting data via SQL...");
-
-            var insertQuery = "INSERT INTO capitals VALUES"
-                             + "('Australia','Canberra'),"
-                             + "('Croatia','Zagreb'),"
-                             + "('Czech Republic','Prague'),"
-                             + "('England','London'),"
-                             + "('Turkey','Ankara'),"
-                             + "('United States','Washington, DC');";
-
-            if (await client.Sql.ExecuteCommandAsync(insertQuery) > 0)
-                Console.WriteLine("The data has been inserted successfully.");
-
-            Console.WriteLine("------------------------------------------");
-        }
-
-        private static async Task ClearCapitals(IHazelcastClient client)
-        {
-            Console.WriteLine("Deleting data via SQL...");
-
-            if (await client.Sql.ExecuteCommandAsync("DELETE FROM capitals") > 0)
-                Console.WriteLine("The data has been deleted successfully.");
-
-            Console.WriteLine("------------------------------------------");
-        }
-
-        private static async Task CreateMappingForCapitals(IHazelcastClient client)
-        {
-            Console.WriteLine("Creating a mapping...");
-            // See: https://docs.hazelcast.com/hazelcast/5.1/sql/mapping-to-maps
-
-            var mappingString = "CREATE OR REPLACE MAPPING capitals TYPE IMap"
-                                + " OPTIONS ("
-                                + "   'keyFormat' = 'varchar',"
-                                + "   'valueFormat' = 'varchar'"
-                                + ")";
-
-            if (await client.Sql.ExecuteCommandAsync(mappingString) > 0)
-                Console.WriteLine("The mapping has been created successfully.");
-
-            Console.WriteLine("------------------------------------------");
-        }
-        #endregion
-
-        public static async Task MapExample(IHazelcastClient client)
-        {
-            var map = await client.GetMapAsync<string, HazelcastJsonValue>("cities");
-
-            await map.PutAsync("1", new CityDTO { City = "London", Population = 9_540_576, Country = "United Kingdom" }.AsJson());
-            await map.PutAsync("2", new CityDTO { City = "Manchester", Population = 2_770_434, Country = "United Kingdom" }.AsJson());
-            await map.PutAsync("3", new CityDTO { City = "New York", Population = 19_223_191, Country = "United States" }.AsJson());
-            await map.PutAsync("4", new CityDTO { City = "Los Angeles", Population = 3_985_520, Country = "United States" }.AsJson());
-            await map.PutAsync("5", new CityDTO { City = "Ankara", Population = 5_309_690, Country = "Turkey" }.AsJson());
-            await map.PutAsync("6", new CityDTO { City = "Istanbul", Population = 15_636_243, Country = "Turkey" }.AsJson());
-            await map.PutAsync("7", new CityDTO { City = "Sao Paulo", Population = 22_429_800, Country = "Brazil" }.AsJson());
-            await map.PutAsync("8", new CityDTO { City = "Rio de Janeiro", Population = 13_634_274, Country = "Brazil" }.AsJson());
-
-            var size = await map.GetSizeAsync();
-
-            Console.WriteLine($"'cities' contains {size} entries.");
-            Console.WriteLine("----------------------------------");
+            Console.WriteLine("\n!! Hint !! You can execute your SQL queries on your Viridian cluster over the management center. Go to 'Management Center' of your Hazelcast Viridian cluster, then open the 'SQL Browser' and try to execute 'SELECT * FROM users'.\n");
         }
 
         public static HazelcastOptionsBuilder WithConsoleLogger(this HazelcastOptionsBuilder builder)
