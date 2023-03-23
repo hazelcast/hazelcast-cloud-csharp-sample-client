@@ -17,7 +17,7 @@ namespace ClientWithSsl
     internal static class Program
     {
         public static async Task Main(string[] args)
-        {  
+        {
             Console.WriteLine("Connect Hazelcast Viridian with TLS");
 
             Console.Write("Build options...");
@@ -94,7 +94,14 @@ namespace ClientWithSsl
                                 (4, 'Olivia', 'United Kingdom'),
                                 (5, 'Jonas', 'Germany')";
 
-            await client.Sql.ExecuteCommandAsync(insertQuery);
+            try
+            {
+                await client.Sql.ExecuteCommandAsync(insertQuery);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
+            }
 
             // Let's also add a user as object.
             var map = await client.GetMapAsync<int, User>("users");
