@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using Hazelcast;
@@ -16,41 +17,44 @@ namespace ClientWithSsl
     internal static class Program
     {
         public static async Task Main(string[] args)
-        {
+        {  
             Console.WriteLine("Connect Hazelcast Viridian with TLS");
 
             Console.Write("Build options...");
 
             var options = new HazelcastOptionsBuilder()
                 .WithConsoleLogger()
+                .With(config =>
+                {
+                    // Your Viridian cluster name.
+                    config.ClusterName = "YOUR_CLUSTER_NAME";
+                    // Your discovery token to connect Viridian cluster.
+                    config.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
+                    // Enable metrics to see on Management Center.
+                    config.Metrics.Enabled = true;
+                    // Configure SSL.
+                    config.Networking.Ssl.Enabled = true;
+                    config.Networking.Ssl.ValidateCertificateChain = false;
+                    config.Networking.Ssl.Protocol = SslProtocols.Tls12;
+                    config.Networking.Ssl.CertificatePath = "client.pfx";
+                    config.Networking.Ssl.CertificatePassword = "YOUR_SSL_PASSWORD";
+
+                    // Register Compact serializer of User class.
+                    config.Serialization.Compact.AddSerializer(new UserSerializer());
+                })
+                .With(args)
                 // Log level must be a valid Microsoft.Extensions.Logging.LogLevel value.
                 // Trace | Debug | Information | Warning | Error | Critical | None
                 .With("Logging:LogLevel:Hazelcast", "Information")
                 .Build();
 
-            // Your Viridian cluster name.
-            options.ClusterName = "YOUR_CLUSTER_NAME";
-
-            // Your discovery token to connect Viridian cluster.
-            options.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
-
-            // Enable metrics to see on Management Center.
-            options.Metrics.Enabled = true;
-
-            // Configure SSL
-            options.Networking.Ssl.Enabled = true;
-            options.Networking.Ssl.ValidateCertificateChain = false;
-            options.Networking.Ssl.Protocol = SslProtocols.Tls12;
-            options.Networking.Ssl.CertificatePath = "client.pfx";
-            options.Networking.Ssl.CertificatePassword = "YOUR_SSL_PASSWORD";
-
             Console.WriteLine("Get and connect client...");
             await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
             Console.WriteLine("Connection Sucessful!");
 
-            // Arrange data with SQL.
+            // Arrange data.
             await CreateMapping(client);
-            await AddUsersWithSQL(client);
+            await AddUsers(client);
             await FetchUsersWithSQL(client);
 
             Console.WriteLine("Done.");
@@ -67,19 +71,20 @@ namespace ClientWithSsl
                                     users (
                                         __key INT,
                                         name VARCHAR,
-                                        country VARCHAR
-                                    ) TYPE IMAP
-                                    OPTIONS ( 'keyFormat' = 'int',
-                                              'valueFormat' = 'json-flat' )";
+                                        country VARCHAR) TYPE IMAP
+                                    OPTIONS ( 
+                                        'keyFormat' = 'int',
+                                        'valueFormat' = 'compact',
+                                        'valueCompactTypeName' = 'user')";
 
             await client.Sql.ExecuteCommandAsync(mappingCommand);
 
             Console.Write("OK.");
         }
 
-        private static async Task AddUsersWithSQL(IHazelcastClient client)
+        private static async Task AddUsers(IHazelcastClient client)
         {
-            Console.Write("\nInserting users into 'users' map via SQL...");
+            Console.Write("\nInserting users into 'users' map...");
 
             var insertQuery = @"INSERT INTO users 
                                 (__key, name, country) VALUES
@@ -91,6 +96,10 @@ namespace ClientWithSsl
 
             await client.Sql.ExecuteCommandAsync(insertQuery);
 
+            // Let's also add a user as object.
+            var map = await client.GetMapAsync<int, User>("users");
+            await map.PutAsync(6, new User { Name = "Alice", Country = "Brazil" });
+
             Console.Write("OK.");
         }
 
@@ -98,16 +107,19 @@ namespace ClientWithSsl
         {
             Console.WriteLine("\nFetching users via SQL...");
 
-            await using var result = await client.Sql.ExecuteQueryAsync("SELECT * FROM users");
+            await using var result = await client.Sql.ExecuteQueryAsync("SELECT __key, this FROM users");
 
-            Console.WriteLine("--Results of 'SELECT * FROM users'");
+            Console.WriteLine("--Results of 'SELECT __key, this FROM users'");
 
             await foreach (var row in result)
             {
-                Console.WriteLine($"Id:{row.GetKey<int>()}\tName:{row.GetColumn<string>("name")}\tCountry:{row.GetColumn<string>("country")}");
+                var id = row.GetKey<int>(); // Corresponds to '__key'
+                var user = row.GetValue<User>(); // Corresponds to 'this'
+
+                Console.WriteLine($"Id:{id}\tName:{user.Name}\tCountry:{user.Country}");
             }
 
-            Console.WriteLine("\n!! Hint !! You can execute your SQL queries on your Viridian cluster over the management center. Go to 'Management Center' of your Hazelcast Viridian cluster, then open the 'SQL Browser' and try to execute 'SELECT * FROM users'.\n");
+            Console.WriteLine("\n!! Hint !! You can execute your SQL queries on your Viridian cluster over the management center. \n 1. Go to 'Management Center' of your Hazelcast Viridian cluster. \n 2. Open the 'SQL Browser'. \n 3. Try to execute 'SELECT * FROM users'.\n");
         }
 
         public static HazelcastOptionsBuilder WithConsoleLogger(this HazelcastOptionsBuilder builder)
