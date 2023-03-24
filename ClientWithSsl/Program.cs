@@ -1,5 +1,18 @@
-﻿using System;
-using System.IO;
+﻿// Copyright (c) 2008-2023, Hazelcast, Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+using System;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using Hazelcast;
@@ -19,7 +32,6 @@ namespace ClientWithSsl
         public static async Task Main(string[] args)
         {
             Console.WriteLine("Connect Hazelcast Viridian with TLS");
-
             Console.Write("Build options...");
 
             var options = new HazelcastOptionsBuilder()
@@ -40,7 +52,7 @@ namespace ClientWithSsl
                     config.Networking.Ssl.CertificatePassword = "YOUR_SSL_PASSWORD";
 
                     // Register Compact serializer of User class.
-                    config.Serialization.Compact.AddSerializer(new UserSerializer());
+                    config.Serialization.Compact.AddSerializer(new CitySerializer());
                 })
                 .With(args)
                 // Log level must be a valid Microsoft.Extensions.Logging.LogLevel value.
@@ -68,14 +80,15 @@ namespace ClientWithSsl
             Console.Write("\nCreating the mapping...");
 
             var mappingCommand = @"CREATE OR REPLACE MAPPING 
-                                    users (
-                                        __key INT,
-                                        name VARCHAR,
-                                        country VARCHAR) TYPE IMAP
+                                    cities (
+                                        __key INT,                                        
+                                        country VARCHAR,
+                                        city VARCHAR,
+                                        population INT) TYPE IMAP
                                     OPTIONS ( 
                                         'keyFormat' = 'int',
                                         'valueFormat' = 'compact',
-                                        'valueCompactTypeName' = 'user')";
+                                        'valueCompactTypeName' = 'city')";
 
             await client.Sql.ExecuteCommandAsync(mappingCommand);
 
@@ -84,15 +97,17 @@ namespace ClientWithSsl
 
         private static async Task AddUsers(IHazelcastClient client)
         {
-            Console.Write("\nInserting users into 'users' map...");
+            Console.Write("\nInserting cities into 'cities' map...");
 
-            var insertQuery = @"INSERT INTO users 
-                                (__key, name, country) VALUES
-                                (1, 'Emre', 'Türkiye'),
-                                (2, 'Aika', 'Japan'),
-                                (3, 'John', 'United States'),
-                                (4, 'Olivia', 'United Kingdom'),
-                                (5, 'Jonas', 'Germany')";
+            var insertQuery = @"INSERT INTO cities 
+                                (__key, city, country, population) VALUES
+                                (1, 'London', 'United Kingdom', 9540576),
+                                (2, 'Manchester', 'United Kingdom', 2770434),
+                                (3, 'New York', 'United States', 19223191),
+                                (4, 'Los Angeles', 'United States', 3985520),
+                                (5, 'Istanbul', 'Türkiye', 15636243),
+                                (6, 'Ankara', 'Türkiye', 5309690),
+                                (7, 'Sao Paulo ', 'Brazil', 22429800)";
 
             try
             {
@@ -100,33 +115,39 @@ namespace ClientWithSsl
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.ToString());
+                Console.WriteLine("FAILED. "+ex.ToString());
             }
 
+            Console.Write("\nPutting a city into 'cities' map...");
             // Let's also add a user as object.
-            var map = await client.GetMapAsync<int, User>("users");
-            await map.PutAsync(6, new User { Name = "Alice", Country = "Brazil" });
+            var map = await client.GetMapAsync<int, CityDTO>("cities");
+            await map.PutAsync(8, new CityDTO { City = "Rio de Janeiro", Country = "Brazil", Population = 13634274 });
 
             Console.Write("OK.");
         }
 
         private static async Task FetchUsersWithSQL(IHazelcastClient client)
         {
-            Console.WriteLine("\nFetching users via SQL...");
+            Console.Write("\nFetching cities via SQL...");
 
-            await using var result = await client.Sql.ExecuteQueryAsync("SELECT __key, this FROM users");
-
-            Console.WriteLine("--Results of 'SELECT __key, this FROM users'");
+            await using var result = await client.Sql.ExecuteQueryAsync("SELECT __key, this FROM cities");
+            Console.Write("OK.");
+            Console.WriteLine("\n--Results of 'SELECT __key, this FROM cities'");
+            Console.WriteLine(String.Format("| {0,4} | {1,20} | {2,20} | {3,15} |","id", "country", "city", "population"));
 
             await foreach (var row in result)
             {
                 var id = row.GetKey<int>(); // Corresponds to '__key'
-                var user = row.GetValue<User>(); // Corresponds to 'this'
+                var c = row.GetValue<CityDTO>(); // Corresponds to 'this'
 
-                Console.WriteLine($"Id:{id}\tName:{user.Name}\tCountry:{user.Country}");
+                Console.WriteLine(string.Format("| {0,4} | {1,20} | {2,20} | {3,15} |",
+                                    id,
+                                    c.Country,
+                                    c.City,
+                                    c.Population));
             }
 
-            Console.WriteLine("\n!! Hint !! You can execute your SQL queries on your Viridian cluster over the management center. \n 1. Go to 'Management Center' of your Hazelcast Viridian cluster. \n 2. Open the 'SQL Browser'. \n 3. Try to execute 'SELECT * FROM users'.\n");
+            Console.WriteLine("\n!! Hint !! You can execute your SQL queries on your Viridian cluster over the management center. \n 1. Go to 'Management Center' of your Hazelcast Viridian cluster. \n 2. Open the 'SQL Browser'. \n 3. Try to execute 'SELECT * FROM cities'.\n");
         }
 
         public static HazelcastOptionsBuilder WithConsoleLogger(this HazelcastOptionsBuilder builder)
