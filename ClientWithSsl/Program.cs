@@ -62,7 +62,7 @@ namespace ClientWithSsl
 
             Console.WriteLine("Get and connect client...");
             await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
-            Console.WriteLine("Connection Sucessful!");
+            Console.WriteLine("Connection Successful!");
 
             // Arrange data.
             await CreateMapping(client);
