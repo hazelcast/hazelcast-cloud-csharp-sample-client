@@ -25,7 +25,7 @@ namespace ClientWithSsl
      * over TLS, and to then insert and fetch data with SQL, thus testing that the connection to 
      * the Hazelcast Viridian cluster is successful.
      * 
-     * Hazelcast .Net Client: https://hazelcast.github.io/hazelcast-csharp-client/
+     * See: https://docs.hazelcast.com/cloud/get-started
      */
     internal static class Program
     {
@@ -51,7 +51,7 @@ namespace ClientWithSsl
                     config.Networking.Ssl.CertificatePath = "client.pfx";
                     config.Networking.Ssl.CertificatePassword = "YOUR_SSL_PASSWORD";
 
-                    // Register Compact serializer of User class.
+                    // Register Compact serializer of City class.
                     config.Serialization.Compact.AddSerializer(new CitySerializer());
                 })
                 .With(args)
@@ -66,8 +66,8 @@ namespace ClientWithSsl
 
             // Arrange data.
             await CreateMapping(client);
-            await AddUsers(client);
-            await FetchUsersWithSQL(client);
+            await PopulateCities(client);
+            await FetchCitiesWithSQL(client);
 
             Console.WriteLine("Done.");
         }
@@ -95,7 +95,7 @@ namespace ClientWithSsl
             Console.Write("OK.");
         }
 
-        private static async Task AddUsers(IHazelcastClient client)
+        private static async Task PopulateCities(IHazelcastClient client)
         {
             Console.Write("\nInserting cities into 'cities' map...");
 
@@ -119,14 +119,14 @@ namespace ClientWithSsl
             }
 
             Console.Write("\nPutting a city into 'cities' map...");
-            // Let's also add a user as object.
+            // Let's also add a city as object.
             var map = await client.GetMapAsync<int, CityDTO>("cities");
             await map.PutAsync(8, new CityDTO { City = "Rio de Janeiro", Country = "Brazil", Population = 13634274 });
 
             Console.Write("OK.");
         }
 
-        private static async Task FetchUsersWithSQL(IHazelcastClient client)
+        private static async Task FetchCitiesWithSQL(IHazelcastClient client)
         {
             Console.Write("\nFetching cities via SQL...");
 
