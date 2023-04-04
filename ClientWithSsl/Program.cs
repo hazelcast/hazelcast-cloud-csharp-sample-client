@@ -40,8 +40,9 @@ namespace ClientWithSsl
                 {
                     // Your Viridian cluster name.
                     config.ClusterName = "YOUR_CLUSTER_NAME";
-                    // Your discovery token to connect Viridian cluster.
-                    config.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
+                    // Your discovery token and url to connect Viridian cluster.
+                    config.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";                    
+                    config.Networking.Cloud.Url = new Uri("YOUR_DISCOVERY_URL");
                     // Enable metrics to see on Management Center.
                     config.Metrics.Enabled = true;
                     // Configure SSL.
