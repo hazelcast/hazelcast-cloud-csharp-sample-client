@@ -99,20 +99,23 @@ namespace ClientWithSsl
 
         private static async Task PopulateCities(IHazelcastClient client)
         {
-            Console.Write("\nInserting cities into 'cities' map...");
-
-            var insertQuery = @"INSERT INTO cities 
-                                (__key, city, country, population) VALUES
-                                (1, 'London', 'United Kingdom', 9540576),
-                                (2, 'Manchester', 'United Kingdom', 2770434),
-                                (3, 'New York', 'United States', 19223191),
-                                (4, 'Los Angeles', 'United States', 3985520),
-                                (5, 'Istanbul', 'Türkiye', 15636243),
-                                (6, 'Ankara', 'Türkiye', 5309690),
-                                (7, 'Sao Paulo ', 'Brazil', 22429800)";
-
             try
             {
+                Console.Write("\nCleaning up the 'cities' map...");
+                await client.Sql.ExecuteCommandAsync("DELETE FROM cities");
+                Console.Write("Cleanup...OK.");
+                Console.Write("\nInserting cities into 'cities' map...");
+
+                var insertQuery = @"INSERT INTO cities
+                                    (__key, city, country, population) VALUES
+                                    (1, 'London', 'United Kingdom', 9540576),
+                                    (2, 'Manchester', 'United Kingdom', 2770434),
+                                    (3, 'New York', 'United States', 19223191),
+                                    (4, 'Los Angeles', 'United States', 3985520),
+                                    (5, 'Istanbul', 'Türkiye', 15636243),
+                                    (6, 'Ankara', 'Türkiye', 5309690),
+                                    (7, 'Sao Paulo ', 'Brazil', 22429800)";
+
                 await client.Sql.ExecuteCommandAsync(insertQuery);
             }
             catch (Exception ex)
