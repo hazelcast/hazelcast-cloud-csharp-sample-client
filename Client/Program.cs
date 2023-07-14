@@ -144,10 +144,11 @@ namespace Client
 
         private static async Task PopulateCities(IHazelcastClient client)
         {
+            var map = await client.GetMapAsync<string, HazelcastJsonValue>("city");
+            map.ClearAsync();
+
             // see: https://docs.hazelcast.com/hazelcast/5.1/data-structures/creating-a-map#writing-json-to-a-map
             Console.WriteLine("Populating 'city' map with JSON values...");
-
-            var map = await client.GetMapAsync<string, HazelcastJsonValue>("city");
 
             await map.PutAsync("1", new CityDTO { City = "Canberra", Population = 467_194, Country = "AU" }.AsJson());
             await map.PutAsync("2", new CityDTO { City = "Prague", Population = 1_318_085, Country = "CZ" }.AsJson());
@@ -327,6 +328,7 @@ namespace Client
         public static async Task MapExample(IHazelcastClient client)
         {
             var map = await client.GetMapAsync<string, HazelcastJsonValue>("cities");
+            map.ClearAsync();
 
             await map.PutAsync("1", new CityDTO { City = "London", Population = 9_540_576, Country = "United Kingdom" }.AsJson());
             await map.PutAsync("2", new CityDTO { City = "Manchester", Population = 2_770_434, Country = "United Kingdom" }.AsJson());
