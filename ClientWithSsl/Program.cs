@@ -151,7 +151,13 @@ namespace ClientWithSsl
                                     c.Population));
             }
 
-            Console.WriteLine("\n!! Hint !! You can execute your SQL queries on your Viridian cluster over the management center. \n 1. Go to 'Management Center' of your Hazelcast Viridian cluster. \n 2. Open the 'SQL Browser'. \n 3. Try to execute 'SELECT * FROM cities'.\n");
+            Console.WriteLine(
+                "\n" +
+                "!! Hint !! You can execute your SQL queries on your Viridian cluster using the 'SQL Broswer' UI.\n" +
+                "1. Start one of the preloaded demos in your Trial Experience.\n" +
+                "2. This will open the 'SQL Browser'.\n" +
+                "3. Add a new Tab.\n" +
+                "4. Try to execute 'SELECT * FROM cities'.\n");
         }
 
         public static HazelcastOptionsBuilder WithConsoleLogger(this HazelcastOptionsBuilder builder)
