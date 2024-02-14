@@ -21,9 +21,9 @@ using Microsoft.Extensions.Logging;
 namespace ClientWithSsl
 {
     /*
-     * A sample application that configures a client to connect to an Hazelcast Viridian cluster
+     * A sample application that configures a client to connect to an Hazelcast Cloud cluster
      * over TLS, and to then insert and fetch data with SQL, thus testing that the connection to 
-     * the Hazelcast Viridian cluster is successful.
+     * the Hazelcast Cloud cluster is successful.
      * 
      * See: https://docs.hazelcast.com/cloud/get-started
      */
@@ -31,18 +31,18 @@ namespace ClientWithSsl
     {
         public static async Task Main(string[] args)
         {
-            Console.WriteLine("Connect Hazelcast Viridian with TLS");
+            Console.WriteLine("Connect Hazelcast Cloud with TLS");
             Console.Write("Build options...");
 
             var options = new HazelcastOptionsBuilder()
                 .WithConsoleLogger()
                 .With(config =>
                 {
-                    // Your Viridian cluster name.
+                    // Your Hazelcast Cloud cluster name.
                     config.ClusterName = "YOUR_CLUSTER_NAME";
-                    // Your discovery token to connect Viridian cluster.
+                    // Your discovery token to connect Hazelcast Cloud cluster.
                     config.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
-                    // This is only for testing purpose, default URL is Viridian production.
+                    // This is only for testing purpose, default URL is Hazelcast Cloud production.
                     config.Networking.Cloud.Url = new Uri("YOUR_DISCOVERY_URL");
                     // Enable metrics to see on Management Center.
                     config.Metrics.Enabled = true;
@@ -154,7 +154,7 @@ namespace ClientWithSsl
 
             Console.WriteLine(
                 "\n" +
-                "!! Hint !! You can execute your SQL queries on your Viridian cluster using the 'SQL Broswer' UI.\n" +
+                "!! Hint !! You can execute your SQL queries on your Hazelcast Cloud cluster using the 'SQL Broswer' UI.\n" +
                 "1. Start one of the preloaded demos in your Trial Experience.\n" +
                 "2. This will open the 'SQL Browser'.\n" +
                 "3. Add a new Tab.\n" +
