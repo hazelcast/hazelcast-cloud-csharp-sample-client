@@ -1,112 +1,164 @@
-﻿using System;
+﻿// Copyright (c) 2008-2023, Hazelcast, Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+using System;
 using System.Security.Authentication;
 using System.Threading.Tasks;
 using Hazelcast;
-using Hazelcast.Networking;
 using Microsoft.Extensions.Logging;
 
 namespace ClientWithSsl
 {
     /*
      * A sample application that configures a client to connect to an Hazelcast Cloud cluster
-     * with SSL, and to then put and get random values in/from a map, thus testing that the
-     * connection to the Hazelcast Cloud cluster is successful.
-     *
-     * see: https://hazelcast.github.io/hazelcast-csharp-client/
+     * over TLS, and to then insert and fetch data with SQL, thus testing that the connection to 
+     * the Hazelcast Cloud cluster is successful.
+     * 
+     * See: https://docs.hazelcast.com/cloud/get-started
      */
     internal static class Program
     {
-        private const int IterationCount = 100;
-
         public static async Task Main(string[] args)
         {
-            Console.WriteLine();
-            Console.WriteLine("Hazelcast Cloud Client with SSL");
-
+            Console.WriteLine("Connect Hazelcast Cloud with TLS");
             Console.Write("Build options...");
+
             var options = new HazelcastOptionsBuilder()
-                .With(args)
                 .WithConsoleLogger()
+                .With(config =>
+                {
+                    // Your Hazelcast Cloud cluster name.
+                    config.ClusterName = "YOUR_CLUSTER_NAME";
+                    // Your discovery token to connect Hazelcast Cloud cluster.
+                    config.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
+                    // This is only for testing purpose, default URL is Hazelcast Cloud production.
+                    config.Networking.Cloud.Url = new Uri("YOUR_DISCOVERY_URL");
+                    // Enable metrics to see on Management Center.
+                    config.Metrics.Enabled = true;
+                    // Configure SSL.
+                    config.Networking.Ssl.Enabled = true;
+                    config.Networking.Ssl.ValidateCertificateChain = false;
+                    config.Networking.Ssl.Protocol = SslProtocols.Tls12;
+                    config.Networking.Ssl.CertificatePath = "client.pfx";
+                    config.Networking.Ssl.CertificatePassword = "YOUR_SSL_PASSWORD";
+
+                    // Register Compact serializer of City class.
+                    config.Serialization.Compact.AddSerializer(new CitySerializer());
+                })
+                .With(args)
+                // Log level must be a valid Microsoft.Extensions.Logging.LogLevel value.
+                // Trace | Debug | Information | Warning | Error | Critical | None
                 .With("Logging:LogLevel:Hazelcast", "Information")
                 .Build();
 
-            // log level must be a valid Microsoft.Extensions.Logging.LogLevel value
-            //   Trace | Debug | Information | Warning | Error | Critical | None
-
-            if (args.Length == 0)
-            {
-                // it is OK to pass the arguments in the command line
-                // otherwise, they must be specified here
-
-                // set the cluster name
-                options.ClusterName = "YOUR_CLUSTER_NAME";
-
-                // set the cloud discovery token and url
-                options.Networking.Cloud.DiscoveryToken = "YOUR_CLUSTER_DISCOVERY_TOKEN";
-                options.Networking.Cloud.Url = new Uri("YOUR_DISCOVERY_URL");
-            }
-
-            // make sure the client stays connected
-            options.Networking.ReconnectMode = ReconnectMode.ReconnectAsync;
-            
-            // enable metrics
-            options.Metrics.Enabled = true;
-
-            // set ssl
-            options.Networking.Ssl.Enabled = true;
-            options.Networking.Ssl.ValidateCertificateChain = false;
-            options.Networking.Ssl.Protocol = SslProtocols.Tls12;
-            options.Networking.Ssl.CertificatePath = "client.pfx";
-            options.Networking.Ssl.CertificatePassword = "YOUR_SSL_PASSWORD";
-
-            Console.WriteLine(" ok.");
-
-            Console.Write("Get and connect client...");
+            Console.WriteLine("Get and connect client...");
             await using var client = await HazelcastClientFactory.StartNewClientAsync(options);
-            Console.WriteLine(" ok.");
+            Console.WriteLine("Connection Successful!");
 
-            Console.Write("Get map...");
-            await using var map = await client.GetMapAsync<string, string>("map");
-            Console.WriteLine(" ok.");
-
-            Console.Write("Put value into map...");
-            await map.PutAsync("key", "value");
-            Console.WriteLine(" ok.");
-
-            Console.Write("Get value from map...");
-            var value = await map.GetAsync("key");
-            Console.WriteLine(" ok");
-
-            Console.Write("Validate value...");
-            if (value.Equals("value"))
-            {
-                Console.WriteLine("ok.");
-            }
-            else
-            {
-                Console.WriteLine("Error.");
-                Console.WriteLine("Check your configuration.");
-                return;
-            }
-
-            Console.WriteLine("Put/Get values in/from map with random values...");
-            var random = new Random();
-            var step = IterationCount / 10;
-            for (var i = 0; i < IterationCount; i++)
-            {
-                var randomValue = random.Next(100_000);
-                await map.PutAsync("key_" + randomValue, "value_" + randomValue);
-
-                randomValue = random.Next(100_000);
-                await map.GetAsync("key" + randomValue);
-
-                if (i % step == 0)
-                {
-                    Console.WriteLine($"[{i:D3}] map size: {await map.GetSizeAsync()}");
-                }
-            }
+            // Arrange data.
+            await CreateMapping(client);
+            await PopulateCities(client);
+            await FetchCitiesWithSQL(client);
 
             Console.WriteLine("Done.");
+        }
+
+        private static async Task CreateMapping(IHazelcastClient client)
+        {
+            // Mapping is required for your distributed map to be queried over SQL.
+            // See: https://docs.hazelcast.com/hazelcast/latest/sql/mapping-to-maps
+
+            Console.Write("\nCreating the mapping...");
+
+            var mappingCommand = @"CREATE OR REPLACE MAPPING 
+                                    cities (
+                                        __key INT,                                        
+                                        country VARCHAR,
+                                        city VARCHAR,
+                                        population INT) TYPE IMAP
+                                    OPTIONS ( 
+                                        'keyFormat' = 'int',
+                                        'valueFormat' = 'compact',
+                                        'valueCompactTypeName' = 'city')";
+
+            await client.Sql.ExecuteCommandAsync(mappingCommand);
+
+            Console.Write("OK.");
+        }
+
+        private static async Task PopulateCities(IHazelcastClient client)
+        {
+            try
+            {
+                Console.Write("\nCleaning up the 'cities' map...");
+                await client.Sql.ExecuteCommandAsync("DELETE FROM cities");
+                Console.Write("Cleanup...OK.");
+                Console.Write("\nInserting cities into 'cities' map...");
+
+                var insertQuery = @"INSERT INTO cities
+                                    (__key, city, country, population) VALUES
+                                    (1, 'London', 'United Kingdom', 9540576),
+                                    (2, 'Manchester', 'United Kingdom', 2770434),
+                                    (3, 'New York', 'United States', 19223191),
+                                    (4, 'Los Angeles', 'United States', 3985520),
+                                    (5, 'Istanbul', 'Türkiye', 15636243),
+                                    (6, 'Ankara', 'Türkiye', 5309690),
+                                    (7, 'Sao Paulo ', 'Brazil', 22429800)";
+
+                await client.Sql.ExecuteCommandAsync(insertQuery);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("FAILED. "+ex.ToString());
+            }
+
+            Console.Write("\nPutting a city into 'cities' map...");
+            // Let's also add a city as object.
+            var map = await client.GetMapAsync<int, CityDTO>("cities");
+            await map.PutAsync(8, new CityDTO { City = "Rio de Janeiro", Country = "Brazil", Population = 13634274 });
+
+            Console.Write("OK.");
+        }
+
+        private static async Task FetchCitiesWithSQL(IHazelcastClient client)
+        {
+            Console.Write("\nFetching cities via SQL...");
+
+            await using var result = await client.Sql.ExecuteQueryAsync("SELECT __key, this FROM cities");
+            Console.Write("OK.");
+            Console.WriteLine("\n--Results of 'SELECT __key, this FROM cities'");
+            Console.WriteLine(String.Format("| {0,4} | {1,20} | {2,20} | {3,15} |","id", "country", "city", "population"));
+
+            await foreach (var row in result)
+            {
+                var id = row.GetKey<int>(); // Corresponds to '__key'
+                var c = row.GetValue<CityDTO>(); // Corresponds to 'this'
+
+                Console.WriteLine(string.Format("| {0,4} | {1,20} | {2,20} | {3,15} |",
+                                    id,
+                                    c.Country,
+                                    c.City,
+                                    c.Population));
+            }
+
+            Console.WriteLine(
+                "\n" +
+                "!! Hint !! You can execute your SQL queries on your Hazelcast Cloud cluster using the 'SQL Broswer' UI.\n" +
+                "1. Start one of the preloaded demos in your Trial Experience.\n" +
+                "2. This will open the 'SQL Browser'.\n" +
+                "3. Add a new Tab.\n" +
+                "4. Try to execute 'SELECT * FROM cities'.\n");
         }
 
         public static HazelcastOptionsBuilder WithConsoleLogger(this HazelcastOptionsBuilder builder)

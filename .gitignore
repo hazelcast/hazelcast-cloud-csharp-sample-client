@@ -1,5 +1,4 @@
-Client/bin
-Client/obj
-ClientWithSsl/bin
-ClientWithSsl/obj
+obj/
+bin/
+.vs
 .idea
